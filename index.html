@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>解圓環</title>
+<style>
+  :root{
+    --bg1:#6ec3ff; --bg2:#3a6ee8; --card:#eef4e6; --ink:#24324a; --gold:#ffd84a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  html,body{margin:0;height:100%;font-family:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;color:var(--ink)}
+  body{background:linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 100%);overflow:hidden;touch-action:manipulation}
+  .sparkle{position:fixed;color:#fff;opacity:.7;font-size:22px;pointer-events:none;animation:tw 3s ease-in-out infinite}
+  @keyframes tw{50%{opacity:.2;transform:scale(.7)}}
+  .app{max-width:520px;height:100%;margin:0 auto;display:flex;flex-direction:column;padding:10px 12px 12px;gap:8px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  h1{margin:0;font-size:28px;font-weight:900;color:#fff;letter-spacing:2px;
+     text-shadow:0 3px 0 #1f3f9e,0 0 12px rgba(0,0,0,.15);-webkit-text-stroke:1px #1f3f9e}
+  h1 span{color:var(--gold)}
+  .btn{border:0;border-radius:14px;background:#fff;color:var(--ink);font-weight:800;font-size:15px;
+       padding:9px 12px;box-shadow:0 4px 0 #c6d3ee;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #c6d3ee}
+  .btn.gold{background:var(--gold);box-shadow:0 4px 0 #c79c0b}
+  .btn.icon{padding:9px 11px}
+  .stats{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .pill{background:rgba(255,255,255,.92);border-radius:999px;padding:6px 14px;font-weight:800;font-size:15px;display:flex;align-items:center;gap:6px;box-shadow:0 3px 0 rgba(20,40,120,.25)}
+  .tip{background:rgba(255,255,255,.95);border-radius:14px;padding:8px 12px;font-size:14px;line-height:1.45;font-weight:600;box-shadow:0 3px 0 rgba(20,40,120,.2)}
+  .tip:empty{display:none}
+  .board{flex:1;min-height:0;background:linear-gradient(180deg,#f4f8ee,#e3ecd8);border:6px solid #fff;border-radius:28px;
+         box-shadow:0 8px 24px rgba(10,30,100,.35);position:relative;overflow:hidden}
+  svg#game{width:100%;height:100%;display:block;touch-action:none}
+  footer{display:flex;gap:8px;justify-content:center}
+  .ring{cursor:pointer}
+  .overlay{position:fixed;inset:0;background:rgba(15,30,80,.55);display:none;align-items:center;justify-content:center;z-index:10;padding:20px}
+  .overlay.show{display:flex}
+  .panel{background:#fff;border-radius:26px;padding:22px 20px;text-align:center;width:100%;max-width:360px;box-shadow:0 10px 0 #c6d3ee;animation:pop .35s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes pop{from{transform:scale(.6);opacity:0}}
+  .panel h2{margin:4px 0 8px;font-size:28px}
+  .panel p{margin:6px 0 16px;font-weight:600;color:#56627a}
+  .stars{font-size:46px;letter-spacing:6px;margin:4px 0}
+  .stars .off{filter:grayscale(1);opacity:.25}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:10px 0 16px}
+  .lv{aspect-ratio:1;border-radius:16px;border:0;font-size:20px;font-weight:900;background:#5ab4ea;color:#fff;box-shadow:0 4px 0 #2f86c0;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+  .lv small{font-size:10px;letter-spacing:-1px}
+  .lv.locked{background:#cfd6e2;box-shadow:0 4px 0 #a9b3c4;cursor:not-allowed}
+  .lv.cur{outline:3px solid var(--gold)}
+  .row{display:flex;gap:10px;justify-content:center}
+  .confetti{position:fixed;top:-20px;width:10px;height:14px;z-index:20;pointer-events:none;animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+</style>
+</head>
+<body>
+<div class="sparkle" style="left:6%;top:6%">✦</div>
+<div class="sparkle" style="right:8%;top:12%;animation-delay:1s">✦</div>
+<div class="sparkle" style="left:12%;bottom:18%;animation-delay:2s;font-size:16px">✦</div>
+<div class="app">
+  <header>
+    <h1>解<span>圓環</span></h1>
+    <div class="row">
+      <button class="btn icon" id="soundBtn" title="音效">🔊</button>
+      <button class="btn" id="menuBtn">關卡</button>
+    </div>
+  </header>
+  <div class="stats">
+    <div class="pill" id="lvPill">第 1 / 10 關</div>
+    <div class="pill" id="movePill">步數 0</div>
+  </div>
+  <div class="tip" id="tip"></div>
+  <div class="board">
+    <svg id="game" viewBox="0 0 400 560" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <footer>
+    <button class="btn gold" id="hintBtn">💡 提示</button>
+    <button class="btn" id="resetBtn">↺ 重來</button>
+  </footer>
+</div>
+
+<div class="overlay" id="winOv"><div class="panel">
+  <h2>🎉 過關！</h2>
+  <div class="stars" id="winStars"></div>
+  <p id="winText"></p>
+  <div class="row"><button class="btn" id="winRetry">↺ 再玩一次</button><button class="btn gold" id="winNext">下一關 ▶</button></div>
+</div></div>
+
+<div class="overlay" id="menuOv"><div class="panel">
+  <h2>選擇關卡</h2>
+  <div class="grid" id="lvGrid"></div>
+  <div class="row"><button class="btn" id="menuClose">關閉</button></div>
+</div></div>
+
+<div class="overlay" id="endOv"><div class="panel">
+  <h2>🏆 全部破關！</h2>
+  <div class="stars" id="endStars"></div>
+  <p id="endText">你是解圓環大師！</p>
+  <div class="row"><button class="btn gold" id="endMenu">回到關卡</button></div>
+</div></div>
+
+<script>
+(() => {
+"use strict";
+// ---------- 設定 ----------
+const GH = 32;        // 缺口半寬（度）
+const TOL = 20;       // 卡榫可滑出的容許角度
+const STEP = 90;      // 每次旋轉角度
+const SW = 15;        // 圓環粗細
+let ROT_MS = 300;
+
+const PAL = {
+  purple:['#9b6ee8','#6a42b5','#cdb6f7'],
+  blue:  ['#5ab4ea','#2b82bd','#b3e0f9'],
+  pink:  ['#ee6fae','#bf4380','#f9bcdb'],
+  green: ['#7ccb52','#4a982a','#c2eaa8'],
+  dgreen:['#3f9b5d','#24703e','#95d3a9'],
+  red:   ['#ec5a4c','#b5352a','#f7aaa2'],
+  orange:['#f59a3e','#c26c16','#fccd98'],
+  navy:  ['#4867da','#2a43a5','#a8b8f2'],
+  yellow:['#f2c235','#bf9010','#f9e3a0'],
+  teal:  ['#2fc2b2','#1b8b7f','#a3e9e1'],
+};
+
+// 關卡設定：n=圓環數，depth=卡住的層數，extra=額外卡榫，ice=冰凍環數，gift=禮物環數
+const LEVEL_CFG = [
+ { n:8,  depth:1, extra:0, ice:0, gift:0, tip:'點一下<b>沒有鎖</b>的圓環讓它轉動！缺口轉到卡榫的位置，卡榫就會脫落。<br>點圓環<b>右半邊 ↻ 順時針</b>，點<b>左半邊 ↺ 逆時針</b>。' },
+ { n:8,  depth:2, extra:0, ice:0, gift:0, tip:'有 🔒 的圓環被卡住了，要先把它的卡榫從別的環上解開才能轉。' },
+ { n:8,  depth:2, extra:2, ice:0, gift:0, tip:'有的圓環同時卡在兩個環上，兩個卡榫都要解開喔。' },
+ { n:9,  depth:2, extra:1, ice:1, gift:0, tip:'❄️ <b>冰凍環</b>：要先點幾下把冰敲碎，才能轉動！' },
+ { n:9,  depth:3, extra:2, ice:1, gift:0, tip:'想一想：先轉哪一個環，可以讓最多的鎖打開？' },
+ { n:9,  depth:3, extra:2, ice:1, gift:1, tip:'🎁 <b>禮物環</b>：把它解開，步數 −2，更容易拿到 3 顆星！' },
+ { n:9,  depth:3, extra:3, ice:2, gift:1, tip:'冰凍環變多了！先想好順序再動手。' },
+ { n:10, depth:3, extra:3, ice:2, gift:1, tip:'10 個圓環來了！一個一個慢慢解。' },
+ { n:10, depth:4, extra:3, ice:2, gift:1, tip:'層層卡住！找出最上面的那個環先轉。' },
+ { n:10, depth:4, extra:4, ice:3, gift:2, tip:'最終關！所有花樣都在這裡，加油！' },
+];
+const COLORS = ['purple','blue','pink','green','dgreen','red','orange','navy','yellow','teal'];
+const LAYOUTS = {
+  8:  [[3,2,3],[2,2,2,2],[3,3,2],[2,3,3]],
+  9:  [[3,3,3],[2,3,2,2],[2,2,3,2],[3,2,2,2]],
+  10: [[3,2,3,2],[2,3,2,3],[2,3,3,2],[3,2,2,3]],
+};
+
+// ---------- 工具 ----------
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const mod = (a,n) => ((a % n) + n) % n;
+const angDist = (a,b) => { const d = mod(a-b,360); return Math.min(d,360-d); };
+function el(tag, attrs, parent){
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function swept(gFrom, gTo, k){
+  if (gTo >= gFrom){ const x = mod(k - gFrom + TOL, 360); return x <= (gTo-gFrom) + 2*TOL; }
+  const x = mod(gFrom - k + TOL, 360); return x <= (gFrom-gTo) + 2*TOL;
+}
+function arcPath(r){
+  const a1 = GH*Math.PI/180, a2 = (360-GH)*Math.PI/180;
+  return `M ${r*Math.cos(a1)} ${r*Math.sin(a1)} A ${r} ${r} 0 1 1 ${r*Math.cos(a2)} ${r*Math.sin(a2)}`;
+}
+
+// ---------- 關卡產生器（固定種子，每次都一樣） ----------
+function rng(seed){ return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function segCircleDist(ax, ay, bx, by, cx, cy){
+  const dx = bx-ax, dy = by-ay, L = dx*dx+dy*dy;
+  let t = L ? ((cx-ax)*dx + (cy-ay)*dy)/L : 0; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(ax+t*dx-cx, ay+t*dy-cy);
+}
+function segCross(p, q){
+  const o = (a,b,c) => Math.sign((b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]));
+  return o(p[0],p[1],q[0]) !== o(p[0],p[1],q[1]) && o(q[0],q[1],p[0]) !== o(q[0],q[1],p[1]);
+}
+function tryGenerate(cfg, rand){
+  const n = cfg.n, rows = LAYOUTS[n][Math.floor(rand()*LAYOUTS[n].length)];
+  const r = n === 8 ? 45 : n === 9 ? 42 : 40;
+  const gapY = Math.min(150, 415/(rows.length-1));
+  const y0 = 280 - gapY*(rows.length-1)/2;
+  const rings = [];
+  rows.forEach((cnt, ri) => {
+    const xs = cnt === 3 ? [75,200,325] : [130,270];
+    xs.forEach(x => rings.push({ x: x + (rand()-0.5)*24, y: y0 + ri*gapY + (rand()-0.5)*20, r: r + Math.round((rand()-0.5)*6) }));
+  });
+  // 不可重疊、不可出界
+  for (const A of rings){
+    if (A.x-A.r < 10 || A.x+A.r > 390 || A.y-A.r < 10 || A.y+A.r > 550) return null;
+    for (const B of rings) if (A !== B && Math.hypot(A.x-B.x, A.y-B.y) - A.r - B.r < 14) return null;
+  }
+  // 可以連的鄰居
+  const near = (i,j) => { const A = rings[i], B = rings[j]; const st = Math.hypot(A.x-B.x, A.y-B.y) - A.r - B.r;
+    if (st < 18 || st > 72) return false;
+    for (let k = 0; k < n; k++){ if (k===i || k===j) continue; const C = rings[k];
+      if (segCircleDist(A.x, A.y, B.x, B.y, C.x, C.y) < C.r + 12) return false; }
+    return true; };
+  // 分層
+  const D = cfg.depth, layer = rings.map(() => Math.floor(rand()*(D+1)));
+  for (let l = 0; l <= D; l++) if (!layer.includes(l)) layer[Math.floor(rand()*n)] = l;
+  for (let l = 0; l <= D; l++) if (!layer.includes(l)) return null;
+  const links = [], has = (o,h) => links.some(L => L[0]===o && L[1]===h);
+  const owned = i => links.filter(L => L[0]===i).length, hosted = i => links.filter(L => L[1]===i).length;
+  const order = rings.map((_,i) => i).sort((a,b) => layer[a]-layer[b]);
+  for (const i of order){
+    if (layer[i] === 0) continue;
+    let c = rings.map((_,j) => j).filter(j => layer[j] === layer[i]-1 && near(i,j) && hosted(j) < 3);
+    if (!c.length) c = rings.map((_,j) => j).filter(j => layer[j] < layer[i] && near(i,j) && hosted(j) < 3);
+    if (!c.length) return null;
+    links.push([i, c[Math.floor(rand()*c.length)]]);
+  }
+  // 第 0 層的環一定要卡著別人
+  for (let i = 0; i < n; i++){
+    if (layer[i] !== 0 || hosted(i)) continue;
+    const c = rings.map((_,j) => j).filter(j => layer[j] > 0 && near(j,i) && owned(j) < 2);
+    if (!c.length) return null;
+    links.push([c[Math.floor(rand()*c.length)], i]);
+  }
+  let extra = cfg.extra, guard = 0;
+  while (extra > 0 && guard++ < 200){
+    const i = Math.floor(rand()*n), j = Math.floor(rand()*n);
+    if (layer[i] > layer[j] && !has(i,j) && near(i,j) && owned(i) < 2 && hosted(j) < 3){ links.push([i,j]); extra--; }
+  }
+  if (extra > 0) return null;
+  // 實際層數要夠深
+  const memo = {}; const dep = i => memo[i] ?? (memo[i] = Math.max(0, ...links.filter(L => L[0]===i).map(L => 1 + dep(L[1]))));
+  if (Math.max(...rings.map((_,i) => dep(i))) < D) return null;
+  // 支架不可交叉
+  const seg = L => { const A = rings[L[0]], B = rings[L[1]]; return [[A.x,A.y],[B.x,B.y]]; };
+  for (let a = 0; a < links.length; a++) for (let b = a+1; b < links.length; b++){
+    const p = links[a], q = links[b];
+    if (p[0]===q[0] || p[0]===q[1] || p[1]===q[0] || p[1]===q[1]) continue;
+    if (segCross(seg(p), seg(q))) return null;
+  }
+  // 每個環上的卡榫/支架角度要分得開，缺口才有地方放
+  for (let i = 0; i < n; i++){
+    const angs = links.filter(L => L[0]===i || L[1]===i).map(L => { const o = L[0]===i ? L[1] : L[0];
+      return Math.atan2(rings[o].y-rings[i].y, rings[o].x-rings[i].x)*180/Math.PI; });
+    for (let a = 0; a < angs.length; a++) for (let b = a+1; b < angs.length; b++) if (angDist(angs[a], angs[b]) < 38) return null;
+    let best = 0; for (let g = 0; g < 360; g += 5) best = Math.max(best, Math.min(...angs.map(x => angDist(g,x))));
+    if (best < 45) return null;
+  }
+  // 冰凍、禮物：放在需要轉動的環（有卡著別人的）
+  const turners = rings.map((_,i) => i).filter(i => hosted(i) > 0);
+  const pick = (arr, k) => { const a = arr.slice(), out = []; while (out.length < k && a.length) out.push(a.splice(Math.floor(rand()*a.length),1)[0]); return out; };
+  const ice = pick(turners, cfg.ice);
+  if (ice.length < cfg.ice) return null;
+  const gift = pick(rings.map((_,i) => i).filter(i => !ice.includes(i)), cfg.gift);
+  const cols = pick(COLORS, n);
+  return { tip: cfg.tip,
+    rings: rings.map((R,i) => [Math.round(R.x), Math.round(R.y), R.r, cols[i],
+      { ice: ice.includes(i) ? 1 + Math.floor(rand()*2) : 0, gift: gift.includes(i) }]),
+    links };
+}
+function makeLevel(i){
+  const cfg = LEVEL_CFG[i];
+  for (let a = 0; a < 60000; a++){ const L = tryGenerate(cfg, rng(7919*(i+1) + a)); if (L) return L; }
+  throw new Error('level gen failed ' + i);
+}
+const LEVELS = LEVEL_CFG.map((_, i) => makeLevel(i));
+
+// 存檔
+const store = {
+  mem:{},
+  get(k,d){ try{ const v = localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){ return k in this.mem?this.mem[k]:d; } },
+  set(k,v){ this.mem[k]=v; try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+// ---------- 音效 ----------
+let actx = null, soundOn = store.get('rings_sound', true);
+function tone(f, d=0.12, type='sine', vol=0.15, delay=0, slide=0){
+  if (!soundOn) return;
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t+d);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t+d);
+    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+d+0.02);
+  }catch(e){}
+}
+const SFX = {
+  turn: () => tone(320,0.12,'triangle',0.1,0,420),
+  pop:  () => { tone(700,0.08,'square',0.06); tone(1050,0.1,'sine',0.1,0.05); },
+  free: () => { tone(523,0.1); tone(659,0.1,'sine',0.15,0.08); tone(784,0.16,'sine',0.15,0.16); },
+  lock: () => tone(140,0.15,'square',0.08,0,100),
+  ice:  () => { tone(1800,0.05,'triangle',0.08); tone(1300,0.08,'triangle',0.08,0.03); },
+  gift: () => { [784,988,1175,1568].forEach((f,i)=>tone(f,0.12,'sine',0.12,i*0.07)); },
+  win:  () => { [523,659,784,1047].forEach((f,i)=>tone(f,0.22,'triangle',0.16,i*0.12)); },
+  boom: () => { tone(120,0.6,'sawtooth',0.2,0,30); tone(80,0.5,'square',0.12,0.05,40); },
+};
+
+// ---------- 遊戲狀態 ----------
+const svg = $('game');
+let S = null;            // 目前關卡狀態
+let progress = store.get('rings_progress', {stars:{}});
+
+function costOfRing(ring, links){
+  const ks = links.filter(l => !l.released && l.host === ring.id).map(l => l.angle);
+  return ring.ice + planRotation(ring.g, ks).length;
+}
+// BFS：找出最少的旋轉步數，讓缺口掃過所有卡榫
+function planRotation(g0, ks){
+  if (!ks.length) return [];
+  const full = (1<<ks.length) - 1;
+  const seen = new Set(['0|0']); let q = [[0,0,[]]];
+  while (q.length){
+    const nq = [];
+    for (const [s,m,path] of q){
+      for (const d of [1,-1]){
+        const ns = s+d; if (Math.abs(ns) > 4) continue;
+        let nm = m;
+        ks.forEach((k,i) => { if (swept(g0+s*STEP, g0+ns*STEP, k)) nm |= 1<<i; });
+        const np = path.concat(d);
+        if (nm === full) return np;
+        const key = ns+'|'+nm; if (seen.has(key)) continue;
+        seen.add(key); nq.push([ns,nm,np]);
+      }
+    }
+    q = nq;
+  }
+  return [1,1,1,1];
+}
+
+function loadLevel(idx){
+  closeAll();
+  const L = LEVELS[idx];
+  const rings = L.rings.map((a,i) => ({ id:i, x:a[0], y:a[1], r:a[2], col:PAL[a[3]], ice:(a[4]&&a[4].ice)||0, iceMax:(a[4]&&a[4].ice)||0,
+    gift:!!(a[4]&&a[4].gift), g:0, locked:false, removed:false }));
+  const links = L.links.map(([o,h]) => {
+    const A = rings[o], B = rings[h];
+    return { owner:o, host:h, angle: Math.atan2(A.y-B.y, A.x-B.x)*180/Math.PI, released:false };
+  });
+  // 缺口方向：離所有卡榫/支架最遠的角度
+  rings.forEach(R => {
+    const angs = links.filter(l => l.host===R.id).map(l => l.angle)
+      .concat(links.filter(l => l.owner===R.id).map(l => { const H = rings[l.host]; return Math.atan2(H.y-R.y, H.x-R.x)*180/Math.PI; }));
+    let best = -90, bestD = -1;
+    for (let a = -90; a < 270; a += 5){
+      const d = angs.length ? Math.min(...angs.map(x => angDist(a,x))) : 180;
+      if (d > bestD + 0.01){ bestD = d; best = a; }
+    }
+    R.g = best;
+  });
+  rings.forEach(R => R.locked = links.some(l => l.owner===R.id));
+  // 最佳步數 & 炸彈倒數
+  const par = rings.reduce((s,R) => s + costOfRing(R, links), 0);
+  S = { idx, rings, links, moves:0, par, busy:false, over:false, hintEl:null };
+  render();
+  updateHUD();
+  $('tip').innerHTML = L.tip || '';
+}
+
+// ---------- 繪圖 ----------
+function render(){
+  svg.innerHTML = '';
+  const defs = el('defs', {}, svg);
+  const f = el('filter', {id:'sh', x:'-30%', y:'-30%', width:'160%', height:'160%'}, defs);
+  el('feDropShadow', {dx:0, dy:4, stdDeviation:2.5, 'flood-color':'#2a3a20', 'flood-opacity':0.22}, f);
+  const ringLayer = el('g', {}, svg), linkLayer = el('g', {}, svg), topLayer = el('g', {}, svg);
+  S.topLayer = topLayer;
+
+  S.rings.forEach(R => {
+    const outer = el('g', {class:'ring', transform:`translate(${R.x} ${R.y})`}, ringLayer);
+    const rot = el('g', {transform:`rotate(${R.g})`}, outer);
+    const d = arcPath(R.r);
+    el('path', {d, fill:'none', stroke:R.col[1], 'stroke-width':SW+4, 'stroke-linecap':'round', filter:'url(#sh)'}, rot);
+    el('path', {d, fill:'none', stroke:R.col[0], 'stroke-width':SW-1, 'stroke-linecap':'round'}, rot);
+    el('path', {d:arcPath(R.r-3), fill:'none', stroke:'#fff', 'stroke-opacity':0.38, 'stroke-width':4, 'stroke-linecap':'round'}, rot);
+    // 透明點擊區
+    el('circle', {r:R.r+14, fill:'transparent'}, outer);
+    const center = el('g', {}, outer);
+    R.el = {outer, rot, center};
+    drawCenter(R);
+  });
+
+  S.links.forEach(l => {
+    const A = S.rings[l.owner], B = S.rings[l.host];
+    const rad = l.angle*Math.PI/180;
+    const kx = B.x + B.r*Math.cos(rad), ky = B.y + B.r*Math.sin(rad);
+    const back = Math.atan2(B.y-A.y, B.x-A.x);
+    const sx = A.x + A.r*Math.cos(back), sy = A.y + A.r*Math.sin(back);
+    const g = el('g', {}, linkLayer);
+    el('line', {x1:sx, y1:sy, x2:kx, y2:ky, stroke:A.col[1], 'stroke-width':10, 'stroke-linecap':'round'}, g);
+    el('line', {x1:sx, y1:sy, x2:kx, y2:ky, stroke:A.col[0], 'stroke-width':6, 'stroke-linecap':'round'}, g);
+    const kg = el('g', {transform:`translate(${kx} ${ky}) rotate(${l.angle+45})`}, g);
+    el('rect', {x:-11, y:-11, width:22, height:22, rx:6, fill:A.col[0], stroke:A.col[1], 'stroke-width':2.5, filter:'url(#sh)'}, kg);
+    el('rect', {x:-7, y:-7, width:8, height:5, rx:2.5, fill:'#fff', opacity:0.45}, kg);
+    l.el = g; l.k = {kx, ky, sx, sy};
+  });
+}
+
+function lockIcon(parent, x, y, s){
+  const g = el('g', {transform:`translate(${x} ${y}) scale(${s})`}, parent);
+  el('path', {d:'M -6 -2 V -7 A 6 6 0 0 1 6 -7 V -2', fill:'none', stroke:'#a99c8b', 'stroke-width':3}, g);
+  el('rect', {x:-9, y:-3, width:18, height:14, rx:3, fill:'#b3a693'}, g);
+  el('circle', {cx:0, cy:3, r:2.2, fill:'#857865'}, g);
+  return g;
+}
+function drawCenter(R){
+  const c = R.el.center; c.innerHTML = '';
+  const hasItem = R.gift;
+  if (R.ice > 0){
+    const ice = el('g', {opacity: 0.45 + 0.4*(R.ice/R.iceMax)}, c);
+    el('circle', {r:R.r, fill:'none', stroke:'#d8f3ff', 'stroke-width':SW+12, opacity:0.85}, ice);
+    el('circle', {r:R.r, fill:'none', stroke:'#8fd6ff', 'stroke-width':2, 'stroke-dasharray':'6 10', opacity:0.9}, ice);
+    for (let i=0;i<6;i++){
+      const a = i*60+15, rr = R.r, ca = Math.cos(a*Math.PI/180), sa = Math.sin(a*Math.PI/180);
+      el('line', {x1:(rr-10)*ca, y1:(rr-10)*sa, x2:(rr+10)*ca, y2:(rr+10)*sa, stroke:'#fff', 'stroke-width':2, opacity:0.9}, ice);
+    }
+    const t = el('text', {x:0, y: hasItem ? -R.r*0.42 : 6, 'text-anchor':'middle', 'font-size':18, 'font-weight':900, fill:'#3aa0d8'}, c);
+    t.textContent = '❄' + R.ice;
+  }
+  if (R.gift){
+    const g = el('g', {}, c);
+    el('rect', {x:-13, y:-8, width:26, height:20, rx:3, fill:'#ff5d73'}, g);
+    el('rect', {x:-15, y:-13, width:30, height:7, rx:2, fill:'#ff7a8c'}, g);
+    el('rect', {x:-3, y:-13, width:6, height:25, fill:'#ffd84a'}, g);
+    el('path', {d:'M 0 -13 C -10 -24 -16 -14 0 -13 C 16 -14 10 -24 0 -13', fill:'#ffd84a'}, g);
+  }
+  if (R.locked){
+    if (hasItem) lockIcon(c, 0, R.r*0.52, 0.8); else lockIcon(c, 0, R.ice>0 ? -R.r*0.35 : 0, 1);
+  }
+}
+
+function updateHUD(){
+  $('lvPill').textContent = `第 ${S.idx+1} / ${LEVELS.length} 關`;
+  $('movePill').textContent = `步數 ${S.moves}`;
+}
+
+// ---------- 動畫 ----------
+function animate(ms, fn){
+  return new Promise(res => {
+    const t0 = performance.now();
+    const step = now => {
+      const p = Math.max(0, Math.min(1, (now-t0)/ms));
+      fn(p);
+      if (p < 1) requestAnimationFrame(step); else res();
+    };
+    requestAnimationFrame(step);
+  });
+}
+const ease = p => 1 - Math.pow(1-p, 3);
+
+function releaseLink(l){
+  l.released = true; SFX.pop();
+  const {kx,ky,sx,sy} = l.k; const g = l.el;
+  const lines = g.querySelectorAll('line'), kg = g.querySelector('g');
+  animate(320, p => {
+    const e = ease(p), x = kx + (sx-kx)*e, y = ky + (sy-ky)*e;
+    lines.forEach(ln => { ln.setAttribute('x2', x); ln.setAttribute('y2', y); });
+    kg.setAttribute('transform', `translate(${x} ${y}) rotate(${l.angle+45+p*180}) scale(${1-0.6*p})`);
+    g.setAttribute('opacity', 1-p);
+  }).then(() => g.remove());
+}
+
+async function rotateRing(R, dir){
+  const g0 = R.g, g1 = g0 + dir*STEP; let prev = g0;
+  SFX.turn();
+  await animate(ROT_MS, p => {
+    const cur = g0 + (g1-g0)*ease(p);
+    R.el.rot.setAttribute('transform', `rotate(${cur})`);
+    S.links.forEach(l => { if (!l.released && l.host===R.id && swept(prev, cur, l.angle)) releaseLink(l); });
+    prev = cur;
+  });
+  R.g = g1;
+}
+
+async function removeRing(R){
+  R.removed = true;
+  if (R.gift){ S.moves = Math.max(0, S.moves-2); floatText(R.x, R.y-10, '🎁 步數 −2', '#ff5d73'); SFX.gift(); }
+  else SFX.free();
+  const o = R.el.outer; o.style.pointerEvents = 'none';
+  await animate(420, p => {
+    const s = 1 + 0.25*p;
+    o.setAttribute('transform', `translate(${R.x} ${R.y - 40*p}) scale(${s})`);
+    o.setAttribute('opacity', 1-p);
+  });
+  o.remove();
+}
+
+function floatText(x, y, txt, color){
+  const t = el('text', {x, y, 'text-anchor':'middle', 'font-size':22, 'font-weight':900, fill:color, stroke:'#fff', 'stroke-width':4, 'paint-order':'stroke'}, S.topLayer);
+  t.textContent = txt;
+  animate(1100, p => { t.setAttribute('y', y - 50*p); t.setAttribute('opacity', p<0.6?1:1-(p-0.6)/0.4); }).then(() => t.remove());
+}
+
+async function shake(R){
+  SFX.lock();
+  await animate(300, p => {
+    const dx = Math.sin(p*Math.PI*6)*6*(1-p);
+    R.el.outer.setAttribute('transform', `translate(${R.x+dx} ${R.y})`);
+  });
+}
+
+// ---------- 遊戲邏輯 ----------
+async function settle(){
+  let changed = true;
+  const removals = [];
+  S.rings.forEach(R => {
+    if (R.removed) return;
+    const wasLocked = R.locked;
+    R.locked = S.links.some(l => !l.released && l.owner===R.id);
+    if (wasLocked !== R.locked) drawCenter(R);
+  });
+  S.rings.forEach(R => {
+    if (R.removed || R.locked) return;
+    if (!S.links.some(l => !l.released && l.host===R.id)) removals.push(R);
+  });
+  if (removals.length) await Promise.all(removals.map(removeRing));
+  updateHUD();
+  if (S.rings.every(R => R.removed)) return win();
+}
+
+function spendMove(){
+  S.moves++;
+  updateHUD();
+}
+
+async function act(R, dir){
+  if (S.busy || S.over || R.removed) return;
+  clearHint();
+  S.busy = true;
+  try{
+    if (R.ice > 0){
+      spendMove(); R.ice--; SFX.ice();
+      drawCenter(R);
+      await animate(160, p => R.el.outer.setAttribute('transform', `translate(${R.x} ${R.y}) scale(${1+0.06*Math.sin(p*Math.PI)})`));
+      if (R.ice === 0) floatText(R.x, R.y, '冰碎了！', '#3aa0d8');
+    } else if (R.locked){
+      await shake(R);
+    } else {
+      spendMove();
+      await rotateRing(R, dir);
+    }
+    await settle();
+  } finally { S.busy = false; }
+}
+
+function pickRing(px, py){
+  let best = null, bestScore = Infinity;
+  S.rings.forEach(R => {
+    if (R.removed) return;
+    const d = Math.hypot(px-R.x, py-R.y);
+    if (d <= R.r + 16){ const sc = d/R.r; if (sc < bestScore){ bestScore = sc; best = R; } }
+  });
+  return best;
+}
+
+svg.addEventListener('pointerdown', e => {
+  if (!S || S.busy || S.over) return;
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const R = pickRing(p.x, p.y);
+  if (!R) return;
+  act(R, p.x < R.x ? -1 : 1);
+});
+
+// ---------- 提示 ----------
+function nextHint(){
+  const live = S.rings.filter(R => !R.removed);
+  const hosted = R => S.links.filter(l => !l.released && l.host===R.id).map(l => l.angle);
+  const useful = R => hosted(R).length > 0;
+  const pri = R => -hosted(R).length;
+  // 可以轉的環（含要先敲冰的）
+  let cands = live.filter(R => !R.locked && useful(R)).sort((a,b) => pri(a)-pri(b));
+  if (cands.length){
+    const R = cands[0];
+    if (R.ice > 0) return {R, dir:0};
+    return {R, dir: planRotation(R.g, hosted(R))[0]};
+  }
+  const iced = live.filter(R => R.ice > 0).sort((a,b) => pri(a)-pri(b));
+  if (iced.length) return {R:iced[0], dir:0};
+  return null;
+}
+function clearHint(){ if (S && S.hintEl){ S.hintEl.remove(); S.hintEl = null; } }
+function showHint(){
+  if (!S || S.busy || S.over) return;
+  clearHint();
+  const h = nextHint(); if (!h) return;
+  const {R, dir} = h;
+  const g = el('g', {'pointer-events':'none'}, S.topLayer);
+  const c = el('circle', {cx:R.x, cy:R.y, r:R.r+14, fill:'none', stroke:'#ffd84a', 'stroke-width':5, 'stroke-dasharray':'10 8'}, g);
+  el('animate', {attributeName:'stroke-dashoffset', values:'0;36', dur:'1s', repeatCount:'indefinite'}, c);
+  const label = R.ice > 0 ? '👆 敲冰' : (dir > 0 ? '👆 點右邊 ↻' : '👆 點左邊 ↺');
+  const t = el('text', {x:R.x, y:R.y - R.r - 22, 'text-anchor':'middle', 'font-size':17, 'font-weight':900, fill:'#c27c00', stroke:'#fff', 'stroke-width':5, 'paint-order':'stroke'}, g);
+  t.textContent = label;
+  S.hintEl = g;
+}
+
+// ---------- 過關 / 失敗 ----------
+function starsFor(){ return S.moves <= S.par ? 3 : S.moves <= S.par + 3 ? 2 : 1; }
+function starHTML(n){ return [0,1,2].map(i => `<span class="${i<n?'':'off'}">⭐</span>`).join(''); }
+function win(){
+  S.over = true; SFX.win(); confetti();
+  const st = starsFor();
+  const prev = progress.stars[S.idx] || 0;
+  progress.stars[S.idx] = Math.max(prev, st);
+  store.set('rings_progress', progress);
+  setTimeout(() => {
+    if (S.idx === LEVELS.length-1){
+      const total = Object.values(progress.stars).reduce((a,b)=>a+b,0);
+      $('endStars').innerHTML = starHTML(st);
+      $('endText').innerHTML = `你是解圓環大師！<br>總共拿到 ${total} / ${LEVELS.length*3} 顆星`;
+      $('endOv').classList.add('show');
+      return;
+    }
+    $('winStars').innerHTML = starHTML(st);
+    $('winText').innerHTML = `用了 ${S.moves} 步` + (st < 3 ? `（${S.par} 步內可拿 3 顆星）` : '，太厲害了！');
+    $('winOv').classList.add('show');
+  }, 500);
+}
+function confetti(){
+  const cols = ['#ffd84a','#ee6fae','#5ab4ea','#7ccb52','#9b6ee8','#f59a3e'];
+  for (let i=0;i<60;i++){
+    const d = document.createElement('div'); d.className = 'confetti';
+    d.style.left = Math.random()*100 + 'vw'; d.style.background = cols[i%cols.length];
+    d.style.animationDuration = (1.6 + Math.random()*1.6) + 's'; d.style.animationDelay = Math.random()*0.4 + 's';
+    document.body.appendChild(d); setTimeout(() => d.remove(), 3800);
+  }
+}
+
+// ---------- 選單 ----------
+function maxUnlocked(){ let m = 0; while (m < LEVELS.length-1 && progress.stars[m]) m++; return m; }
+function openMenu(){
+  const grid = $('lvGrid'); grid.innerHTML = '';
+  const mu = maxUnlocked();
+  LEVELS.forEach((_, i) => {
+    const b = document.createElement('button');
+    const st = progress.stars[i] || 0;
+    b.className = 'lv' + (i > mu ? ' locked' : '') + (S && S.idx===i ? ' cur' : '');
+    b.innerHTML = i > mu ? '🔒' : `${i+1}<small>${'⭐'.repeat(st) || '&nbsp;'}</small>`;
+    if (i <= mu) b.onclick = () => { closeAll(); loadLevel(i); };
+    grid.appendChild(b);
+  });
+  $('menuOv').classList.add('show');
+}
+function closeAll(){ document.querySelectorAll('.overlay').forEach(o => o.classList.remove('show')); }
+
+$('menuBtn').onclick = openMenu;
+$('menuClose').onclick = closeAll;
+$('resetBtn').onclick = () => { if (!S.busy){ closeAll(); loadLevel(S.idx); } };
+$('hintBtn').onclick = showHint;
+$('winRetry').onclick = () => { closeAll(); loadLevel(S.idx); };
+$('winNext').onclick = () => { closeAll(); loadLevel(Math.min(S.idx+1, LEVELS.length-1)); };
+$('endMenu').onclick = () => { closeAll(); openMenu(); };
+const sb = $('soundBtn');
+sb.textContent = soundOn ? '🔊' : '🔇';
+sb.onclick = () => { soundOn = !soundOn; store.set('rings_sound', soundOn); sb.textContent = soundOn ? '🔊' : '🔇'; };
+
+// 測試用介面
+window.__rings = { get S(){ return S; }, LEVELS, loadLevel, act, nextHint, setSpeed(ms){ ROT_MS = ms; } };
+
+loadLevel(Math.min(maxUnlocked(), LEVELS.length-1));
+})();
+</script>
+</body>
+</html>
